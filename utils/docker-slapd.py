@@ -86,6 +86,70 @@ BINDDN\tcn=admin,dc=openforce,dc=org
 URI\tldap://127.0.0.1
 """)
 
+def create_sudo_schema_ldif():
+  with open(os.path.join(BUILD_DIR, 'cn={0}sudo.ldif'), 'w') as f:
+    f.write("""# AUTO-GENERATED FILE - DO NOT EDIT!! Use ldapmodify.
+# CRC32 a96f36e6
+#dn: cn={0}sudo
+dn: cn=sudo,cn=schema,cn=config
+objectClass: olcSchemaConfig
+#cn: {0}sudo
+cn: sudo
+olcAttributeTypes: {0}( 1.3.6.1.4.1.15953.9.1.1 NAME 'sudoUser' DESC 'User(s) 
+ who may  run sudo' EQUALITY caseExactIA5Match SUBSTR caseExactIA5SubstringsMa
+ tch SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
+olcAttributeTypes: {1}( 1.3.6.1.4.1.15953.9.1.2 NAME 'sudoHost' DESC 'Host(s) 
+ who may run sudo' EQUALITY caseExactIA5Match SUBSTR caseExactIA5SubstringsMat
+ ch SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
+olcAttributeTypes: {2}( 1.3.6.1.4.1.15953.9.1.3 NAME 'sudoCommand' DESC 'Comma
+ nd(s) to be executed by sudo' EQUALITY caseExactIA5Match SYNTAX 1.3.6.1.4.1.1
+ 466.115.121.1.26 )
+olcAttributeTypes: {3}( 1.3.6.1.4.1.15953.9.1.4 NAME 'sudoRunAs' DESC 'User(s)
+ impersonated by sudo (deprecated)' EQUALITY caseExactIA5Match SYNTAX 1.3.6.1
+ .4.1.1466.115.121.1.26 )
+olcAttributeTypes: {4}( 1.3.6.1.4.1.15953.9.1.5 NAME 'sudoOption' DESC 'Option
+ s(s) followed by sudo' EQUALITY caseExactIA5Match SYNTAX 1.3.6.1.4.1.1466.115
+ .121.1.26 )
+olcAttributeTypes: {5}( 1.3.6.1.4.1.15953.9.1.6 NAME 'sudoRunAsUser' DESC 'Use
+ r(s) impersonated by sudo' EQUALITY caseExactIA5Match SYNTAX 1.3.6.1.4.1.1466
+ .115.121.1.26 )
+olcAttributeTypes: {6}( 1.3.6.1.4.1.15953.9.1.7 NAME 'sudoRunAsGroup' DESC 'Gr
+ oup(s) impersonated by sudo' EQUALITY caseExactIA5Match SYNTAX 1.3.6.1.4.1.14
+ 66.115.121.1.26 )
+olcAttributeTypes: {7}( 1.3.6.1.4.1.15953.9.1.8 NAME 'sudoNotBefore' DESC 'Sta
+ rt of time interval for which the entry is valid' EQUALITY generalizedTimeMat
+ ch ORDERING generalizedTimeOrderingMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.24
+ )
+olcAttributeTypes: {8}( 1.3.6.1.4.1.15953.9.1.9 NAME 'sudoNotAfter' DESC 'End 
+ of time interval for which the entry is valid' EQUALITY generalizedTimeMatch 
+ ORDERING generalizedTimeOrderingMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.24 )
+olcAttributeTypes: {9}( 1.3.6.1.4.1.15953.9.1.10 NAME 'sudoOrder' DESC 'an int
+ eger to order the sudoRole entries' EQUALITY integerMatch ORDERING integerOrd
+ eringMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.27 )
+olcObjectClasses: {0}( 1.3.6.1.4.1.15953.9.2.1 NAME 'sudoRole' DESC 'Sudoer En
+ tries' SUP top STRUCTURAL MUST cn MAY ( sudoUser $ sudoHost $ sudoCommand $ s
+ udoRunAs $ sudoRunAsUser $ sudoRunAsGroup $ sudoOption $ sudoOrder $ sudoNotB
+ efore $ sudoNotAfter $ description ) )
+""")
+
+def create_nandersson_ldif():
+  with open(os.path.join(BUILD_DIR, 'nandersson.ldif'), 'w') as f:
+    f.write("""dn: cn=defaults,ou=SUDOers,dc=openforce,dc=org
+objectClass: top
+objectClass: sudoRole
+cn: defaults
+description: Default sudoOption's go here
+
+dn: cn=nandersson,ou=SUDOers,dc=openforce,dc=org
+objectClass: top
+objectClass: sudoRole
+cn: nandersson
+sudoUser: nandersson
+sudoHost: ALL
+sudoCommand: ALL
+sudoOption: !authenticate
+""")
+
 def create_dockerfile():
   with open(os.path.join(BUILD_DIR, 'Dockerfile'), 'w') as f:
     f.write("""FROM ubuntu:latest
@@ -93,9 +157,13 @@ ENV REFRESHED_AT 2018-10-02
 RUN apt-get update -yqq
 ADD slapd.debconf /tmp/slapd.debconf
 ADD base.ldif /tmp/base.ldif
+ADD nandersson.ldif /tmp/nandersson.ldif
 RUN debconf-set-selections /tmp/slapd.debconf
 RUN apt-get install slapd ldap-utils -y
+ADD cn={0}sudo.ldif /tmp/
+RUN slapadd -v -F /etc/ldap/slapd.d/ -l /tmp/cn={0}sudo.ldif -b 'cn=config'
 RUN slapadd -l /tmp/base.ldif
+RUN slapadd -l /tmp/nandersson.ldif
 RUN chown -R openldap:openldap /var/lib/ldap
 RUN chmod 0600 /var/lib/ldap/*
 RUN chown -R openldap:openldap /etc/ldap/slapd.d/*
@@ -108,6 +176,8 @@ if __name__ == '__main__':
   mkdir_build_dir()
   create_slapd_debconf()
   create_base_ldif()
+  create_nandersson_ldif()
+  create_sudo_schema_ldif()
   create_ldap_conf()
   create_dockerfile()
   client = docker.DockerClient(base_url='unix://var/run/docker.sock')
