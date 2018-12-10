@@ -17,6 +17,22 @@ def test_ldap_can_fetch_user_by_uid(ldap_conn):
   result = ldap_conn.search_s(ldap_base, ldap.SCOPE_SUBTREE, query)
   assert result[0][1]["displayName"][0] == b"Niklas Andersson"
 
+def test_ldap_can_create_sudo_user(ldap_conn):
+  dn='cn=jdoe,ou=SUDOers,dc=openforce,dc=org'
+  attrs = {
+    "objectClass": [b"top", b"sudoRole"],
+    "cn": [b"jdoe"],
+    "sudoUser": [b"jdoe"],
+    "sudoHost": [b"ALL"],
+    "sudoCommand": [b"ALL"],
+    "sudoOption": [b"!authenticate"],
+  }
+  result = ldap_conn.add_s(dn, modlist.addModlist(attrs))
+  ldap_base = 'dc=openforce,dc=org'
+  query = "(&(objectClass=sudoRole)(cn=jdoe))"
+  result = ldap_conn.search_s(ldap_base, ldap.SCOPE_SUBTREE, query)
+  assert result[0][1]["sudoCommand"][0] == b"ALL"
+
 def test_ldap_can_create_user(ldap_conn):
   dn='uid=jdoe,ou=Users,dc=openforce,dc=org'
   attrs = {
